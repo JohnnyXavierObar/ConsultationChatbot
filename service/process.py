@@ -3,11 +3,12 @@ from langchain_openai import OpenAIEmbeddings
 import os
 from dotenv import load_dotenv
 from langchain_community.vectorstores import SupabaseVectorStore
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings, OpenAI
 from supabase.client import Client, create_client
 import re
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 from pypdf import PdfReader
+from typing import Dict
 
 load_dotenv()
 
@@ -23,7 +24,11 @@ supabase: Client = create_client(supabase_url, supabase_key)
 embeddings = OpenAIEmbeddings(
     model = "text-embedding-3-small"
 )
-
+model = OpenAI(
+    model = "gpt-5-mini",
+    temperature = 0,
+    api_key = openai_api_key
+)
 
 text_splitter = RecursiveCharacterTextSplitter(
     separators=["\n\n", "\n", " ", ""],
@@ -98,16 +103,53 @@ def embed_and_store(chunks, file_id: int):
         ],
     )
 
-vector_store = SupabaseVectorStore(
-    embedding=embeddings,
-    client=supabase,
-    table_name="embeddings",
-)
+# vector_store = SupabaseVectorStore(
+#     embedding=embeddings,
+#     client=supabase,
+#     table_name="embeddings",
+# )
+def retrieve_relevant_chunks(query,file_ids: Dict[int]):
+    query = "Describe the girl in the green leggings—what stands out about her?"
+    file_ids = [13]
+    match_count = 10
+    vectored_query = embeddings.embed_query(query)
 
-query = "A bleak British seaside town seen through the eyes of a cynical teenager"
-matched_docs = vector_store.similarity_search(query, k=2)
-for i, doc in enumerate(matched_docs, 1):
-    print(f"--- Result {i} ---")
-    print("Content:", doc.page_content)
-    print("Metadata:", doc.metadata)
+    result = supabase.rpc(
+    "hybrid_search",
+    {
+        "query_text": query,
+        "query_embedding": vectored_query,
+        "match_count": match_count,
+        "file_ids": file_ids,
+    }
+    ).execute()
 
+    if result:
+        for row in result.data:
+            print("Content: ", row["content"])
+            print("File id: ", row["metadata"]["file_id"])
+
+def openai_chatbot(query, retrieved_chunks):
+    role = "Act as a professional consultation chatbot with expertise in providing clear, practical advice across multiple domains, including lifestyle, productivity, mental health, and professional development. Your tone should be friendly, empathetic, and approachable. Users will ask questions seeking guidance, solutions, or insights. Assume the user has minimal prior knowledge unless they specify otherwise. Your goal is to provide actionable, accurate, and easy-to-understand responses that help the user make informed decisions."
+    context = {"\n".join(retrieved_chunks)}
+
+    input_text = f"""Role/Persona: {role}\nContext: {context}\n 
+    
+    **Output Format**: Provide responses in a structured format:
+    - Summary/Answer: 1–2 concise sentences
+    - Actionable Steps/Advice: 3–5 numbered points
+    - Optional Tips/Warnings: 1–2 extra notes if relevant
+
+    **Constraints**:
+    - Avoid technical jargon; explain terms simply.
+    - Remain neutral and unbiased.
+    - Always provide practical, actionable advice rather than just theoretical explanations.
+    
+    User Input/Question:{query}"""
+
+relevant_chunks = [
+    "Chunk 1: Tips on working from home effectively.",
+    "Chunk 2: Techniques for improving focus and productivity.",
+    "Chunk 3: Advice on maintaining work-life balance."
+]
+print("\n".join(relevant_chunks))
