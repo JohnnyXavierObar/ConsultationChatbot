@@ -3,12 +3,17 @@ from langchain_openai import OpenAIEmbeddings
 import os
 from dotenv import load_dotenv
 from langchain_community.vectorstores import SupabaseVectorStore
-from langchain_openai import OpenAIEmbeddings, OpenAI
+from langchain_openai import OpenAIEmbeddings, OpenAI, ChatOpenAI
 from supabase.client import Client, create_client
 import re
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 from pypdf import PdfReader
-from typing import Dict
+from typing import List
+from pydantic import BaseModel, Field
+from langchain.agents import create_agent
+from langchain.messages import SystemMessage, HumanMessage
+
+
 
 load_dotenv()
 
@@ -21,13 +26,11 @@ if not supabase_key:
 if not supabase_url:
     raise ValueError("Supabase URL not found. Please set NEXT_PUBLIC_SUPABASE_URL.")
 supabase: Client = create_client(supabase_url, supabase_key)
+
+model = ChatOpenAI(model="gpt-5-mini", api_key=openai_api_key)
+
 embeddings = OpenAIEmbeddings(
     model = "text-embedding-3-small"
-)
-model = OpenAI(
-    model = "gpt-5-mini",
-    temperature = 0,
-    api_key = openai_api_key
 )
 
 text_splitter = RecursiveCharacterTextSplitter(
@@ -35,6 +38,11 @@ text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=600,
     chunk_overlap=100,
     length_function=len,
+)
+
+    
+agent = create_agent(
+    model=model,
 )
 
 def create_file_record(file_name, file_type):
@@ -108,48 +116,84 @@ def embed_and_store(chunks, file_id: int):
 #     client=supabase,
 #     table_name="embeddings",
 # )
-def retrieve_relevant_chunks(query,file_ids: Dict[int]):
-    query = "Describe the girl in the green leggings—what stands out about her?"
-    file_ids = [13]
-    match_count = 10
-    vectored_query = embeddings.embed_query(query)
+def retrieve_relevant_chunks(query,file_ids):
 
-    result = supabase.rpc(
-    "hybrid_search",
+    match_count = 10
+    match_threshold = 0.60
+    vectored_query = embeddings.embed_query(query)
+    result = []
+    response = supabase.rpc(
+    "semantic_search",
     {
-        "query_text": query,
         "query_embedding": vectored_query,
-        "match_count": match_count,
+        "match_threshold": match_threshold,
         "file_ids": file_ids,
+        "match_count": match_count,
     }
     ).execute()
 
-    if result:
-        for row in result.data:
-            print("Content: ", row["content"])
-            print("File id: ", row["metadata"]["file_id"])
-
-def openai_chatbot(query, retrieved_chunks):
-    role = "Act as a professional consultation chatbot with expertise in providing clear, practical advice across multiple domains, including lifestyle, productivity, mental health, and professional development. Your tone should be friendly, empathetic, and approachable. Users will ask questions seeking guidance, solutions, or insights. Assume the user has minimal prior knowledge unless they specify otherwise. Your goal is to provide actionable, accurate, and easy-to-understand responses that help the user make informed decisions."
-    context = {"\n".join(retrieved_chunks)}
-
-    input_text = f"""Role/Persona: {role}\nContext: {context}\n 
+    if not response.data:
+        return []
     
-    **Output Format**: Provide responses in a structured format:
-    - Summary/Answer: 1–2 concise sentences
-    - Actionable Steps/Advice: 3–5 numbered points
-    - Optional Tips/Warnings: 1–2 extra notes if relevant
+    result = [
+        {
+            "content": row["content"],
+            "file_id": row["metadata"]["file_id"],
+            "page_number": row["metadata"]["page_number"]
+        }
+        for row in response.data
+    ]
+
+    unique_file_ids = {
+        row["metadata"]["file_id"]
+        for row in response.data
+    }
+
+    files_response = (
+        supabase
+        .table("files")
+        .select("file_id, file_name")
+        .in_("file_id", list(unique_file_ids))
+        .execute()
+    )
+
+    file_map = {
+        row["file_id"]: row["file_name"]
+        for row in files_response.data
+    }
+
+    for chunk in result:
+        chunk["file_name"] = file_map.get(chunk["file_id"])
+
+    return result
+
+def consultation_chatbot(query, retrieved_chunks):
+
+    role = "Act as a professional consultation chatbot with expertise in providing clear, practical advice across multiple domains, including lifestyle, productivity, mental health, and professional development. Your tone should be friendly, empathetic, and approachable. Users will ask questions seeking guidance, solutions, or insights. Assume the user has minimal prior knowledge unless they specify otherwise. Your goal is to provide actionable, accurate, and easy-to-understand responses that help the user make informed decisions."
+    numbered = [f"{idx+1}: {chunk["content"]} " for idx, chunk in enumerate(retrieved_chunks)]
+    relevant_text = "\n".join(numbered)
+    context = f"""Role/Persona: {role}\nContext: {relevant_text}\n 
+    
+    Your output should be concise and up to 5-7 sentences
+
+    If the number of context is lower than 5, start with "Apologies, there’s not enough information available, but based on what I can see..."
 
     **Constraints**:
     - Avoid technical jargon; explain terms simply.
     - Remain neutral and unbiased.
     - Always provide practical, actionable advice rather than just theoretical explanations.
     
-    User Input/Question:{query}"""
+    **User Input/Question**:{query}
+    """
 
-relevant_chunks = [
-    "Chunk 1: Tips on working from home effectively.",
-    "Chunk 2: Techniques for improving focus and productivity.",
-    "Chunk 3: Advice on maintaining work-life balance."
-]
-print("\n".join(relevant_chunks))
+    response = agent.invoke(
+         {"messages": context}
+    )
+
+    structured_output = {
+        "ai_response": response["messages"][1].content,
+        "references": retrieved_chunks,
+
+    }
+    return structured_output
+
