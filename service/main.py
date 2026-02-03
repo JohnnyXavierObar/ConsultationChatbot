@@ -24,6 +24,7 @@ async def status():
 @app.post("/ingest")
 async def ingest(files:List[UploadFile] = File(...)):
     results = []
+    file_ids = []
     ready = True
     for file in files:
         try:
@@ -47,6 +48,8 @@ async def ingest(files:List[UploadFile] = File(...)):
                 {"status": "processed"}
             ).eq("file_id", file_id).execute()
 
+            file_ids.append(file_id)
+
             results.append({
                 "file_name": file.filename,
                 "file_id": file_id,
@@ -54,6 +57,7 @@ async def ingest(files:List[UploadFile] = File(...)):
             })
 
         except Exception as e:
+            file_ids.append(file_id)
             results.append({
                 "file_name": file.filename,
                 "error": str(e)
@@ -62,7 +66,15 @@ async def ingest(files:List[UploadFile] = File(...)):
     if not results:
         return[]
     
-    results.append({"ready": True})
+    session_id = (
+        supabase.table("sessions")
+        .insert({"file_ids":file_ids})
+        .execute()
+    )
+    if not session_id:
+        return "Error inserting to the sessions table"
+
+    results.append({"ready": True, "session_id": session_id["data"][0]["session_id"]})
     
     return results
     
@@ -70,11 +82,11 @@ async def ingest(files:List[UploadFile] = File(...)):
 
 
 @app.post("/chat")
-async def chat(query: str, file_ids: List[int]):
+async def chat(query: str, file_ids: List[int], session_id: str):
     relevant_text = retrieve_relevant_chunks(query, file_ids)
 
     if relevant_text:
-        response = consultation_chatbot(query, relevant_text)
+        response = consultation_chatbot(query, relevant_text, session_id)
         return {"response": response}
     else:
         return{"response": "No relevant information found"}

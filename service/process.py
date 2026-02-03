@@ -11,7 +11,7 @@ from pypdf import PdfReader
 from typing import List
 from pydantic import BaseModel, Field
 from langchain.agents import create_agent
-from langchain.messages import SystemMessage, HumanMessage
+from langchain.messages import SystemMessage,AIMessage, HumanMessage
 
 
 
@@ -111,24 +111,20 @@ def embed_and_store(chunks, file_id: int):
         ],
     )
 
-# vector_store = SupabaseVectorStore(
-#     embedding=embeddings,
-#     client=supabase,
-#     table_name="embeddings",
-# )
+
 def retrieve_relevant_chunks(query,file_ids):
 
     match_count = 10
-    match_threshold = 0.60
+
     vectored_query = embeddings.embed_query(query)
     result = []
     response = supabase.rpc(
-    "semantic_search",
+    "hybrid_search",
     {
+        "query_text": query,
         "query_embedding": vectored_query,
-        "match_threshold": match_threshold,
-        "file_ids": file_ids,
         "match_count": match_count,
+        "file_ids": file_ids,
     }
     ).execute()
 
@@ -167,14 +163,27 @@ def retrieve_relevant_chunks(query,file_ids):
 
     return result
 
-def consultation_chatbot(query, retrieved_chunks):
+def consultation_chatbot(query, retrieved_chunks, session_id):
+    memory = (
+        supabase.table("messages")
+        .select("user_query,ai_message")
+        .eq("session_id", session_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    message_history = ""
+  
+    
+    if memory.data:
+        for idx, message in enumerate(memory.data):
+            message_history = f"{idx+1}:\n User Query: {message["user_query"]}\n AI Reply: {message["ai_message"]}"
 
     role = "Act as a professional consultation chatbot with expertise in providing clear, practical advice across multiple domains, including lifestyle, productivity, mental health, and professional development. Your tone should be friendly, empathetic, and approachable. Users will ask questions seeking guidance, solutions, or insights. Assume the user has minimal prior knowledge unless they specify otherwise. Your goal is to provide actionable, accurate, and easy-to-understand responses that help the user make informed decisions."
     numbered = [f"{idx+1}: {chunk["content"]} " for idx, chunk in enumerate(retrieved_chunks)]
     relevant_text = "\n".join(numbered)
     context = f"""Role/Persona: {role}\nContext: {relevant_text}\n 
-    
-    Your output should be concise and up to 5-7 sentences
+    Past Message History: {message_history if message_history else "None"}
+    \nYour output should be concise and up to 5-7 sentences
 
     If the number of context is lower than 5, start with "Apologies, there’s not enough information available, but based on what I can see..."
 
@@ -189,11 +198,23 @@ def consultation_chatbot(query, retrieved_chunks):
     response = agent.invoke(
          {"messages": context}
     )
+    ai_response = response["messages"][1].content
 
+    store_message = (
+        supabase.table("messages")
+        .insert({
+            "user_query": query,
+            "ai_message": ai_response,
+            "session_id": session_id
+        }).execute()
+    )
+    if not store_message.data:
+        return "There was an error storing data"
+    
     structured_output = {
-        "ai_response": response["messages"][1].content,
+        "ai_response": ai_response,
         "references": retrieved_chunks,
-
     }
+    
     return structured_output
 
