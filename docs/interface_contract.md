@@ -23,7 +23,7 @@ Field  | Type    | Required | Description
 files  | file[]  | Yes      | List of `.pdf` or `.txt` files
 
 Response (JSON):
-
+```json
 {
   "files": [
     {
@@ -42,7 +42,7 @@ Response (JSON):
   "ready": true,
   "session_id": "string"
 }
-
+```
 Notes:
 
 - ready is true only if all files processed successfully.
