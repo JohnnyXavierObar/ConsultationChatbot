@@ -1,9 +1,21 @@
 from fastapi import FastAPI, File, UploadFile
 from typing import List
 from process import *
+from fastapi.middleware.cors import CORSMiddleware
+
+# Allow requests from localhost:3000 (your Next.js frontend)
+origins = [
+    "http://localhost:3000",
+]
 
 app = FastAPI()
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,        # <- frontend origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
@@ -74,9 +86,11 @@ async def ingest(files:List[UploadFile] = File(...)):
     if not session_id:
         return "Error inserting to the sessions table"
 
-    results.append({"ready": True, "session_id": session_id["data"][0]["session_id"]})
-    
-    return results
+    return {
+        "files" : results,
+        "ready": True,
+        "session_id": session_id.data[0]["session_id"]
+    }
     
     
 

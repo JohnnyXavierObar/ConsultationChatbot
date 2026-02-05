@@ -1,0 +1,106 @@
+.box {
+  width: 400px;
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
+  margin: 0 auto; /* Center horizontally */
+}
+
+.dragWrapper {
+  position: relative;
+  border: 2px dashed #c7d2fe;
+  border-radius: 12px;
+  padding: 36px 20px;
+  text-align: center;
+  color: #4f46e5;
+  cursor: pointer;
+  background: #eef2ff;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  transition: background 0.2s ease;
+}
+
+.dragWrapper:hover {
+  background: #e0e7ff;
+}
+
+.dragging {
+  background: #c7d2fe;
+}
+
+.inputFile {
+  display: none;
+}
+
+.uploadBtn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #4f46e5;
+  color: white;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+
+.uploadBtn:disabled {
+  background: #a5b4fc;
+  cursor: not-allowed;
+}
+
+.alert {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.fileList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.fileList li {
+  font-size: 14px;
+  color: #111827;
+  margin: 4px 0;
+}
+
+/* Spinner overlay inside drag box */
+.spinnerOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 12px;
+  z-index: 10;
+}
+
+.spinner {
+  border: 6px solid #f3f3f3;
+  border-top: 6px solid #4f46e5;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
