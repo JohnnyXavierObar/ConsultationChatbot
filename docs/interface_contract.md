@@ -51,14 +51,14 @@ Notes:
 - session_id corresponds to a row in sessions table containing the uploaded file_ids.
 
 Errors:
-
+```json
 {
   "error": {
     "code": "SESSION_CREATE_FAILED",
     "message": "Failed to create session"
   }
 }
-
+```
 ---
 
 ### 2. GET /status
@@ -72,7 +72,7 @@ Parameter | Type   | Required | Description
 file_ids  | int[]  | No       | Optional list of file IDs to check
 
 Response (JSON):
-
+```json
 {
   "ready": true,
   "file_status": [
@@ -88,7 +88,7 @@ Response (JSON):
     }
   ]
 }
-
+```
 Notes:
 
 - ready is true only if all returned files are "processed".
@@ -109,20 +109,17 @@ Errors:
 
 Purpose: Query the chatbot based on previously uploaded files.
 
-Request (JSON):
-
-{
-  "query": "string",
-  "session_id": "string",
-  "file_ids": [123, 124],   // optional, default: all files in session
-  "top_k": 5                 // optional, default 5
-}
+Parameter | Type   | Required | Description
+--------- | ------ | -------- | -----------
+file_ids  | int[]  | Yes      | List of files for the chatbot to use
+session_id| string | Yes      | For long-term conversations
+query     | string | Yes      | User_query
 
 Response (JSON):
-
+```json
 {
-  "response": "string",
-  "citations": [
+  "ai_response": "string",
+  "references": [
     {
       "file_id": 123,
       "file_name": "example.pdf",
@@ -130,48 +127,48 @@ Response (JSON):
       "content": "chunk content here"
     }
   ],
-  "info": {
-    "retrieved_chunks": 3,
-    "status": "success"       // "insufficient_info" if no chunks found
-  }
 }
-
+```
 Notes:
 
 - citations correspond to chunks retrieved and used to generate the answer.
-- If no relevant chunks are found, response is "No relevant information found" and status is "insufficient_info".
+- If no relevant chunks are found, response is ""Apologies, there’s not enough information available, but based on what I can see..." and still generate an answer.
 
-Errors: None explicitly in code; exceptions return HTTP 500.
+Errors: 
+- 400 Bad Request: Raised if a ValueError occurs (e.g., invalid input values).
+- 422 Unprocessable Entity: Raised if a KeyError occurs, typically due to missing keys in data.
+- 500 Internal Server Error: Raised for unexpected server-side errors, such as database failures or AI service errors.
+- Special case: If no relevant chunks are found, the endpoint still returns a valid AI response starting with "Apologies, there’s not enough information available, but based on what I can see..." instead of failing.
 
 ---
 
 ## Data Models
 
 File Record:
-
+```json
 {
   "file_id": int,
   "file_name": "string",
   "file_type": "string",
   "status": "processing" | "processed" | "failed"
 }
-
+```
 Session Record:
-
+```json
 {
   "session_id": "string",
   "file_ids": [int]
 }
-
+```
 Chat Citation:
-
+```json
 {
   "file_id": int,
   "file_name": "string",
   "page_number": int,
   "content": "string"
 }
-
+```
 ---
 
 ## Readiness Rules
@@ -183,10 +180,9 @@ Chat Citation:
 
 ## Constraints / Limits
 
-- Max files per /ingest request: Not enforced in backend.
-- Max file size: Not enforced in backend.
+- Max files per /ingest request: Not enforced in backend but enforced in frontend.
+- Max file size: Not enforced in backend but enforced in frontend.
 - File types: Only .pdf or .txt (application/pdf or text/plain MIME types).
-- Chat context is limited by top_k retrieved chunks and agent configuration.
 
 ---
 
