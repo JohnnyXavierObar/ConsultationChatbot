@@ -10,10 +10,19 @@ export type UploadedFile = {
   type: string;
 };
 
+// Define the Reference type correctly
+export type Reference = {
+  content: string;
+  file_id: number;
+  page_number: number;
+  file_name: string;
+};
+
 export default function Home() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [activeFile, setActiveFile] = useState<UploadedFile | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [references, setReferences] = useState<Reference[]>([]);
 
   return (
     <div
@@ -38,6 +47,7 @@ export default function Home() {
           activeFile={activeFile}
           sessionId={sessionId}
           uploadedFiles={uploadedFiles}
+          references={references} // ✅ Pass the state here
         />
       )}
     </div>

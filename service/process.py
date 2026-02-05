@@ -176,14 +176,14 @@ def consultation_chatbot(query, retrieved_chunks, session_id):
     
     if memory.data:
         for idx, message in enumerate(memory.data):
-            message_history = f"{idx+1}:\n User Query: {message["user_query"]}\n AI Reply: {message["ai_message"]}"
+            message_history += f"{idx+1}:\n User Query: {message['user_query']}\n AI Reply: {message['ai_message']}"
 
     role = "Act as a professional consultation chatbot with expertise in providing clear, practical advice across multiple domains, including lifestyle, productivity, mental health, and professional development. Your tone should be friendly, empathetic, and approachable. Users will ask questions seeking guidance, solutions, or insights. Assume the user has minimal prior knowledge unless they specify otherwise. Your goal is to provide actionable, accurate, and easy-to-understand responses that help the user make informed decisions."
-    numbered = [f"{idx+1}: {chunk["content"]} " for idx, chunk in enumerate(retrieved_chunks)]
+    numbered = [f"{idx+1}: {chunk['content']} " for idx, chunk in enumerate(retrieved_chunks)]
     relevant_text = "\n".join(numbered)
     context = f"""Role/Persona: {role}\nContext: {relevant_text}\n 
     Past Message History: {message_history if message_history else "None"}
-    \nYour output should be concise and up to 5-7 sentences
+    \nYour output should be concise and up to 5-7 sentences maximum if necessary, you can go shorter than that.
 
     If the number of context is lower than 5, start with "Apologies, there’s not enough information available, but based on what I can see..."
 

@@ -8,7 +8,7 @@
   margin: 20px auto;
   display: flex;
   flex-direction: column;
-  height: 90vh; /* Ensuring the container takes most of the screen */
+  height: 90vh;
 }
 
 .header {
@@ -20,17 +20,19 @@
 
 .body {
   display: flex;
-  justify-content: space-between;
-  flex: 1; /* Take up available height */
-  flex-direction: column;
+  flex: 1;
+  gap: 20px; /* space between sidebar and main chat */
+  min-height: 0;
 }
 
+/* Sidebar on the left */
 .sidebar {
-  width: 25%;
-  padding: 15px;
+  width: 20%; /* 10-20% as requested */
   background-color: #f9fafb;
   border-radius: 8px;
-  overflow-y: auto;
+  padding: 15px;
+  overflow-y: scroll; /* scrollable */
+  max-height: calc(90vh - 80px); /* header + padding */
 }
 
 .sidebar h4 {
@@ -46,7 +48,7 @@
 
 .sidebar li {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   margin-bottom: 15px;
   font-size: 14px;
   cursor: pointer;
@@ -72,17 +74,37 @@
   color: white;
 }
 
+.referenceItem {
+  margin-bottom: 12px;
+  padding: 5px;
+  border-radius: 6px;
+  cursor: default;
+  transition: background-color 0.3s ease;
+}
+
+.referenceItem:hover {
+  background-color: #e5e7eb;
+}
+
+.referenceContent {
+  font-size: 12px;
+  color: #555;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* Main chat section */
 .main {
-  width: 70%;
-  padding-left: 20px;
+  width: 80%; /* remaining width */
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
 .messages {
+  flex: 1; /* take remaining space */
   margin-bottom: 20px;
-  max-height: 350px;
+  max-height: calc(90vh - 200px);
   overflow-y: auto;
   padding-right: 10px;
 }
@@ -106,15 +128,14 @@
   align-self: flex-start;
 }
 
+/* Input box fixed at bottom */
 .inputBox {
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-top: 1px solid #e5e7eb;
   padding-top: 15px;
-  position: sticky;
-  bottom: 0; /* Stick the input box to the bottom */
-  background-color: white; /* Ensure the background is white */
+  background-color: white;
   z-index: 10;
 }
 
@@ -149,6 +170,7 @@
   box-shadow: 0 0 4px rgba(79, 70, 229, 0.5);
 }
 
+/* Responsive */
 @media (max-width: 768px) {
   .container {
     width: 100%;
@@ -161,6 +183,7 @@
 
   .sidebar {
     width: 100%;
+    max-height: 200px;
     margin-bottom: 20px;
   }
 

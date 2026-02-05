@@ -86,7 +86,7 @@ export default function FileUpload({
 
       // Process files and update state
       const newUploadedFiles: UploadedFile[] = data.files.map((f: any) => ({
-        id: Date.now(), // Use Date.now() as a unique identifier
+        id: f.file_id, // Use Date.now() as a unique identifier
         name: f.file_name,
         type: f.file_name.endsWith(".pdf") ? "PDF" : "TXT",
       }));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import styles from "./ChatBox.module.css"; // Correct path for the CSS module
+import styles from "./ChatBox.module.css";
 
 export type UploadedFile = {
   id: number;
@@ -9,10 +9,18 @@ export type UploadedFile = {
   type: string;
 };
 
+export type Reference = {
+  content: string;
+  file_id: number;
+  page_number: number;
+  file_name: string;
+};
+
 type Props = {
   activeFile: UploadedFile;
   sessionId: string | null;
   uploadedFiles: UploadedFile[];
+  references: Reference[]; // Add references as a prop
 };
 
 type Message = {
@@ -25,10 +33,12 @@ export default function ChatBox({
   activeFile,
   sessionId,
   uploadedFiles,
+  references: initialReferences, // rename for clarity
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [messageId, setMessageId] = useState(0); // Counter for message IDs
+  const [messageId, setMessageId] = useState(0);
+  const [references, setReferences] = useState<Reference[]>(initialReferences); // local state
 
   const handleSend = async () => {
     if (!newMessage.trim() || !sessionId) return;
@@ -36,12 +46,19 @@ export default function ChatBox({
     const userText = newMessage;
     setNewMessage("");
 
-    // Add user message to state
+    // Add user message
     setMessages((prev) => [
       ...prev,
       { id: messageId, sender: "user", text: userText },
     ]);
-    setMessageId((prevId) => prevId + 1); // Increment messageId to ensure unique keys
+    setMessageId((prevId) => prevId + 1);
+
+    // Add temporary loading message for AI
+    const loadingId = messageId + 1;
+    setMessages((prev) => [
+      ...prev,
+      { id: loadingId, sender: "bot", text: "Loading..." },
+    ]);
 
     try {
       const res = await fetch("http://127.0.0.1:8000/chat", {
@@ -56,82 +73,104 @@ export default function ChatBox({
 
       const data = await res.json();
 
-      console.log(data)
+      // Replace loading message with actual AI response
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === loadingId ? { ...msg, text: data.ai_response } : msg
+        )
+      );
+      setMessageId((prevId) => prevId + 1);
 
-      // Add bot message to state
-      setMessages((prev) => [
+      // Update references dynamically if AI returned new ones
+      if (data.references && Array.isArray(data.references)) {
+        setReferences((prev) => [
         ...prev,
-        { id: messageId + 1, sender: "bot", text: data.response },
-      ]);
-      setMessageId((prevId) => prevId + 1); // Increment again for bot response
+        ...data.references.filter(
+            (r: any) => !prev.some((p) => p.file_id === r.file_id && p.page_number === r.page_number)
+        ),
+        ]);
+      }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: messageId + 2,
-          sender: "bot",
-          text: "Error contacting server",
-        },
-      ]);
-      setMessageId((prevId) => prevId + 1); // Increment for error message
+      // Replace loading with error message
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === loadingId ? { ...msg, text: "Error contacting server" } : msg
+        )
+      );
+      setMessageId((prevId) => prevId + 1);
     }
   };
 
+
+
   return (
     <div className={styles.container}>
-      {/* Header */}
       <header className={styles.header}>
         <h2>Consultation Chat</h2>
       </header>
 
-      {/* Body */}
       <div className={styles.body}>
-        {/* Sidebar */}
+        {/* Sidebar: Files + References */}
         <aside className={styles.sidebar}>
-          <h4>Files</h4>
-          <ul>
+            <h4>Files</h4>
+            <ul>
             {uploadedFiles.map((file) => (
-              <li
-                key={file.id} // Use unique `file.id` for list keys
+                <li
+                key={file.id}
                 className={`${file.id === activeFile.id ? styles.active : ""} ${styles.fileItem}`}
-              >
+                >
                 <div className={styles.fileIcon}>
-                  {/* Example: Show different icons based on file type */}
-                  {file.type === "pdf" ? "📄" : "📁"}
+                    {file.type === "pdf" ? "📄" : "📁"}
                 </div>
                 {file.name}
-              </li>
+                </li>
             ))}
-          </ul>
+            </ul>
+
+            <h4>References</h4>
+            <ul>
+            {references.map((ref, idx) => (
+                <li key={idx} className={styles.referenceItem}>
+                <strong>{ref.file_name}</strong> - Page {ref.page_number}
+                <p className={styles.referenceContent}>
+                    {ref.content.length > 100
+                    ? ref.content.slice(0, 100) + "…"
+                    : ref.content}
+                </p>
+                </li>
+            ))}
+            </ul>
         </aside>
 
-        {/* Main Content */}
+        {/* Main chat */}
         <main className={styles.main}>
-          <div className={styles.messages}>
+            <div className={styles.messages}>
             {messages.map((msg) => (
-              <div
-                key={msg.id} // Ensure unique `key` for each message
-                className={`${styles.message} ${msg.sender === "user" ? styles.userMsg : styles.botMsg}`}
-              >
+                <div
+                key={msg.id}
+                className={`${styles.message} ${
+                    msg.sender === "user" ? styles.userMsg : styles.botMsg
+                }`}
+                >
                 {msg.text}
-              </div>
+                </div>
             ))}
-          </div>
+            </div>
 
-          {/* Input Box (Fixed at the bottom) */}
-          <div className={styles.inputBox}>
+            <div className={styles.inputBox}>
             <input
-              value={newMessage}
-              placeholder="Type your message…"
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                value={newMessage}
+                placeholder="Type your message…"
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
             />
             <button onClick={handleSend} disabled={!newMessage.trim()}>
-              Send
+                Send
             </button>
-          </div>
+            </div>
         </main>
-      </div>
+        </div>
+
     </div>
   );
 }

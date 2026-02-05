@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, Query
+from fastapi import FastAPI, File, UploadFile, Query, HTTPException
 from typing import List, Optional
 from process import *
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +16,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class ChatRequest(BaseModel):
+    query: str
+    file_ids: List[int]
+    session_id: str
+
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
@@ -84,8 +90,8 @@ async def ingest(files:List[UploadFile] = File(...)):
         .insert({"file_ids":file_ids})
         .execute()
     )
-    if not session_id:
-        return "Error inserting to the sessions table"
+    if not session_id.data:
+        return {"error": "Failed to create session"}
 
     return {
         "files" : results,
@@ -97,11 +103,14 @@ async def ingest(files:List[UploadFile] = File(...)):
 
 
 @app.post("/chat")
-async def chat(query: str, file_ids: List[int], session_id: str):
-    relevant_text = retrieve_relevant_chunks(query, file_ids)
-
-    if relevant_text:
-        response = consultation_chatbot(query, relevant_text, session_id)
-        return {"response": response}
-    else:
-        return{"response": "No relevant information found"}
+async def chat(request: ChatRequest):
+    try:
+        relevant_text = retrieve_relevant_chunks(request.query, request.file_ids)
+        response = consultation_chatbot(request.query, relevant_text, request.session_id)
+        return response
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except KeyError as ke:
+        raise HTTPException(status_code=422, detail=f"Missing key: {ke}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal server error")
