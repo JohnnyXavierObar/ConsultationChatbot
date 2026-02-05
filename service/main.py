@@ -1,5 +1,5 @@
-from fastapi import FastAPI, File, UploadFile
-from typing import List
+from fastapi import FastAPI, File, UploadFile, Query
+from typing import List, Optional
 from process import *
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,17 +21,18 @@ async def root():
     return {"message": "Hello World"}
 
 @app.get("/status")
-async def status():
+async def status(file_ids: Optional[List[int]] = Query(default=None)):
     try:
-        response = (
-            supabase.table("files")
-            .select("file_type, status")
-            .execute()
-        )
-        return response
+        query = supabase.table("files").select("file_type, status")
+
+        if file_ids:
+            query = query.in_("id", file_ids)
+
+        response = query.execute()
+        return response.data
+
     except Exception as e:
         return {"error": str(e)}
-
 
 @app.post("/ingest")
 async def ingest(files:List[UploadFile] = File(...)):
